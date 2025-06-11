@@ -93,7 +93,16 @@ def main():
                 
                 severity_score = 0
                 if "severity" in v and v["severity"]:
-                    severity_score = v["severity"][0].get("score", 0)
+                    if isinstance(v["severity"], list) and len(v["severity"]) > 0:
+                        if isinstance(v["severity"][0], dict) and "score" in v["severity"][0]:
+                            severity_score = float(v["severity"][0]["score"])
+                        elif isinstance(v["severity"][0], (int, float)):
+                            severity_score = float(v["severity"][0])
+                    elif isinstance(v["severity"], (int, float, str)):
+                        try:
+                            severity_score = float(v["severity"])
+                        except (ValueError, TypeError):
+                            severity_score = 0
                 
                 vuln_info = {
                     "package": pkg,
@@ -101,13 +110,14 @@ def main():
                     "id": v["id"],
                     "cves": cves,
                     "summary": v.get("summary", ""),
-                    "severity": severity_score,
+                    "severity": severity_score, 
                     "details": v.get("details", ""),
                     "references": v.get("references", []),
                     "published_date": v.get("published", ""),
                     "modified_date": v.get("modified", ""),
                     "affected_versions": vuln_details.get("affected", []) if vuln_details else []
                 }
+     
                 vulns.append(vuln_info)
 
     if vulns:

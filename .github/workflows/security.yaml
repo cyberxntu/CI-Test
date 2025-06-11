@@ -1,0 +1,96 @@
+name: Security CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read      
+  checks: write      
+  actions: read  
+  security-events: write 
+
+jobs:
+  custom-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      # Run SAST
+      - name: Run SAST
+        run: python .github/workflows/scripts/sast.py app.py /tamplates
+        continue-on-error: true
+
+      - name: Show SAST results
+        run: cat sast_results.json || echo "No SAST issues"
+
+      # Run SCA
+      - name: Run SCA
+        run: python .github/workflows/scripts/sca.py requirements.txt
+        continue-on-error: true
+
+      - name: Show SCA results
+        run: cat sca_results.json || echo "No SCA issues"
+
+      # Run Secret Scan
+      - name: Run Secret Scan
+        run: python .github/workflows/scripts/secret_scanner.py
+        continue-on-error: true
+
+      - name: Show Secret Scan results
+        run: cat secrets_found.json || echo "No secrets found"
+
+      # Run Code Style Check
+      - name: Run Code Style
+        run: python .github/workflows/scripts/code_style.py
+        continue-on-error: true
+
+      - name: Show Code Style results
+        run: cat style_results.json || echo "No style issues"
+
+      # Merge all results into one report
+      - name: Merge all results
+        run: |
+          echo "{" > full_report.json
+          echo '"sast":' >> full_report.json && cat sast_results.json >> full_report.json || echo '[]' >> full_report.json
+          echo ',' >> full_report.json
+          echo '"sca":' >> full_report.json && cat sca_results.json >> full_report.json || echo '[]' >> full_report.json
+          echo ',' >> full_report.json
+          echo '"secrets":' >> full_report.json && cat secrets_found.json >> full_report.json || echo '[]' >> full_report.json
+          echo ',' >> full_report.json
+          echo '"style":' >> full_report.json && cat style_results.json >> full_report.json || echo '[]' >> full_report.json
+          echo "}" >> full_report.json
+
+      # Final check for any issues (this fails the job)
+      - name: Final Check for Failures
+        run: |
+          echo "🔍 Checking scan results for any findings..."
+          (grep -q '"desc":' sast_results.json && echo "❌ SAST issues found" && exit 1) || echo "✅ No SAST issues"
+          (grep -q '"summary":' sca_results.json && echo "❌ SCA issues found" && exit 1) || echo "✅ No SCA issues"
+          (grep -q '"pattern":' secrets_found.json && echo "❌ Secrets found" && exit 1) || echo "✅ No secrets"
+          (grep -q '"issue":' style_results.json && echo "❌ Code style issues found" && exit 1) || echo "✅ Code style clean"
+
+      # Upload artifacts
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-results
+          path: |
+            sast_results.json
+            sca_results.json
+            secrets_found.json
+            style_results.json
+            full_report.json

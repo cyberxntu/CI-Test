@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>الصفحة الرئيسية</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+<body>
+    <h1> التعليقات</h1>
+    {% if session.username %}
+    <form action="/comment" method="POST">
+        <textarea name="comment" placeholder="اكتب تعليقك"></textarea>
+        <button type="submit">إرسال</button>
+    </form>
+    {% endif %}
+    <ul>
+        {% for c in comments %}
+            <li><strong>{{ c.username }}</strong>: {{ c.content|safe }}</li>
+        {% endfor %}
+    </ul>
+    <a href="/logout">تسجيل خروج</a>
+</body>
+</html>

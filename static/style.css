@@ -1,0 +1,142 @@
+/* Reset بسيط */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* رأس الصفحة */
+header {
+    background-color: #4A90E2;
+    color: white;
+    padding: 1.2rem 2rem;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* الحاوية العامة */
+.container {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+/* الأزرار */
+button, input[type="submit"] {
+    background-color: #4A90E2;
+    color: white;
+    border: none;
+    padding: 0.7rem 1.2rem;
+    font-size: 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button:hover, input[type="submit"]:hover {
+    background-color: #357ABD;
+}
+
+/* النماذج */
+form {
+    background: white;
+    padding: 1.5rem 2rem;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+input[type="text"],
+input[type="password"],
+textarea {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1.2rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+    border-color: #4A90E2;
+    outline: none;
+}
+
+/* التعليقات */
+.comments {
+    list-style: none;
+    padding-left: 0;
+}
+
+.comments li {
+    background: white;
+    margin-bottom: 1rem;
+    padding: 1rem 1.2rem;
+    border-radius: 7px;
+    box-shadow: 0 0 6px rgba(0,0,0,0.05);
+}
+
+.comment-username {
+    font-weight: 700;
+    color: #4A90E2;
+    margin-bottom: 0.3rem;
+}
+
+.comment-content {
+    font-size: 1rem;
+}
+
+/* لوحة التحكم */
+.dashboard {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.dashboard h2 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+/* التنسيق العام للروابط */
+a {
+    color: #4A90E2;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* الفوتر */
+footer {
+    margin-top: auto;
+    background: #eee;
+    padding: 1rem 0;
+    text-align: center;
+    font-size: 0.9rem;
+    color: #666;
+}

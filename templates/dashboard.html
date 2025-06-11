@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>لوحة التحكم</title>
+</head>
+<body>
+    <h1>مرحبا {{ username }}</h1>
+    <p> الرصيد: {{ balance }}</p>
+    <form method="POST">
+        <input name="to" placeholder="اسم المستخدم المستلم" required>
+        <input name="amount" type="number" placeholder="المبلغ" required>
+        <button type="submit">تحويل</button>
+    </form>
+    <a href="/">الرجوع</a> | <a href="/logout">تسجيل خروج</a>
+</body>
+</html>

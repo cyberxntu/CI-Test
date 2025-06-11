@@ -28,7 +28,7 @@ def check_package_vulnerabilities(pkg, version):
     except requests.RequestException as e:
         print(f"Error checking {pkg}=={version}: {str(e)}", file=sys.stderr)
         return pkg, version, []
-
+        
 def read_requirements_file(file_path):
     encodings = ['utf-8', 'utf-16', 'latin-1']
     packages = []
@@ -74,6 +74,27 @@ def main():
         print(f"Error reading requirements file: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
+    def check_package_vulnerabilities(pkg, version):
+    try:
+        res = requests.post(
+            "https://api.osv.dev/v1/query",
+            json={
+                "package": {"name": pkg, "ecosystem": "PyPI"},
+                "version": version
+            },
+            timeout=15
+        )
+        res.raise_for_status()
+        return pkg, version, res.json().get("vulns", [])
+    except requests.RequestException as e:
+        print(f"Error checking {pkg}=={version}: {str(e)}", file=sys.stderr)
+        return pkg, version, []
+
+# ... (بقية الدوال تبقى كما هي)
+
+def main():
+    # ... (الجزء الأول من main يبقى كما هو)
+    
     vulns = []
     
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -91,6 +112,7 @@ def main():
                 elif vuln_details and "aliases" in vuln_details:
                     cves = [alias for alias in vuln_details["aliases"] if alias.startswith("CVE-")]
                 
+                # معالجة severity بشكل آمن
                 severity_score = 0
                 if "severity" in v and v["severity"]:
                     if isinstance(v["severity"], list) and len(v["severity"]) > 0:
@@ -110,21 +132,23 @@ def main():
                     "id": v["id"],
                     "cves": cves,
                     "summary": v.get("summary", ""),
-                    "severity": severity_score, 
+                    "severity": severity_score,  # الآن ستكون رقمياً دائماً
                     "details": v.get("details", ""),
                     "references": v.get("references", []),
                     "published_date": v.get("published", ""),
                     "modified_date": v.get("modified", ""),
                     "affected_versions": vuln_details.get("affected", []) if vuln_details else []
                 }
-     
                 vulns.append(vuln_info)
 
     if vulns:
+        # الترتيب الآن سيعمل بدون أخطاء
         vulns.sort(key=lambda x: (
             -len(x["cves"]),
             -x["severity"]
         ))
+
+        # ... (بقية الدالة تبقى كما هي)
 
         try:
             with open(output_file, "w", encoding="utf-8") as out:

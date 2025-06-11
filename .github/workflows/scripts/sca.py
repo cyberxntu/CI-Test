@@ -6,10 +6,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def get_vulnerability_details(vuln_id):
     try:
-        res = requests.get(f"https://api.osv.dev/v1/vulns/{quote(vuln_id)}")
+        res = requests.get(f"https://api.osv.dev/v1/vulns/{quote(vuln_id)}", timeout=10)
         res.raise_for_status()
         return res.json()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        print(f"Error fetching details for {vuln_id}: {str(e)}", file=sys.stderr)
         return None
 
 def check_package_vulnerabilities(pkg, version):
@@ -20,13 +21,43 @@ def check_package_vulnerabilities(pkg, version):
                 "package": {"name": pkg, "ecosystem": "PyPI"},
                 "version": version
             },
-            timeout=10
+            timeout=15
         )
         res.raise_for_status()
         return pkg, version, res.json().get("vulns", [])
     except requests.RequestException as e:
         print(f"Error checking {pkg}=={version}: {str(e)}", file=sys.stderr)
         return pkg, version, []
+
+def read_requirements_file(file_path):
+    encodings = ['utf-8', 'utf-16', 'latin-1']
+    packages = []
+    
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    
+                    if "==" in line:
+                        pkg, version = line.split("==", 1)
+                    elif ">=" in line:
+                        pkg, version = line.split(">=", 1)
+                    elif "<=" in line:
+                        pkg, version = line.split("<=", 1)
+                    elif "~=" in line:
+                        pkg, version = line.split("~=", 1)
+                    else:
+                        continue
+                    
+                    packages.append((pkg.strip(), version.strip()))
+            return packages
+        except UnicodeDecodeError:
+            continue
+    
+    raise ValueError(f"Could not read {file_path} with any of the supported encodings: {encodings}")
 
 def main():
     if len(sys.argv) < 2:
@@ -37,28 +68,14 @@ def main():
     if len(sys.argv) > 2 and sys.argv[2].startswith("--output="):
         output_file = sys.argv[2].split("=")[1]
 
+    try:
+        packages = read_requirements_file(sys.argv[1])
+    except Exception as e:
+        print(f"Error reading requirements file: {str(e)}", file=sys.stderr)
+        sys.exit(1)
+
     vulns = []
-    packages = []
-
-    with open(sys.argv[1]) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            
-            if "==" in line:
-                pkg, version = line.split("==")
-            elif ">=" in line:
-                pkg, version = line.split(">=")
-            elif "<=" in line:
-                pkg, version = line.split("<=")
-            elif "~=" in line:
-                pkg, version = line.split("~=")
-            else:
-                continue
-            
-            packages.append((pkg.strip(), version.strip()))
-
+    
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(check_package_vulnerabilities, pkg, version) 
                  for pkg, version in packages]
@@ -74,13 +91,17 @@ def main():
                 elif vuln_details and "aliases" in vuln_details:
                     cves = [alias for alias in vuln_details["aliases"] if alias.startswith("CVE-")]
                 
+                severity_score = 0
+                if "severity" in v and v["severity"]:
+                    severity_score = v["severity"][0].get("score", 0)
+                
                 vuln_info = {
                     "package": pkg,
                     "version": version,
                     "id": v["id"],
                     "cves": cves,
                     "summary": v.get("summary", ""),
-                    "severity": v.get("severity", []),
+                    "severity": severity_score,
                     "details": v.get("details", ""),
                     "references": v.get("references", []),
                     "published_date": v.get("published", ""),
@@ -92,24 +113,30 @@ def main():
     if vulns:
         vulns.sort(key=lambda x: (
             -len(x["cves"]),
-            x["severity"][0]["score"] if x.get("severity") else 0
+            -x["severity"]
         ))
 
-        with open(output_file, "w", encoding="utf-8") as out:
-            json.dump({
-                "metadata": {
-                    "source": "OSV Database",
-                    "scanned_file": sys.argv[1],
-                    "total_vulnerabilities": len(vulns),
-                    "unique_cves": len({cve for vuln in vulns for cve in vuln["cves"]})
-                },
-                "vulnerabilities": vulns
-            }, out, indent=2, ensure_ascii=False)
+        try:
+            with open(output_file, "w", encoding="utf-8") as out:
+                json.dump({
+                    "metadata": {
+                        "source": "OSV Database",
+                        "scanned_file": sys.argv[1],
+                        "total_packages_scanned": len(packages),
+                        "total_vulnerabilities": len(vulns),
+                        "unique_cves": len({cve for vuln in vulns for cve in vuln["cves"]}),
+                        "highest_severity": max(vuln["severity"] for vuln in vulns) if vulns else 0
+                    },
+                    "vulnerabilities": vulns
+                }, out, indent=2, ensure_ascii=False)
 
-        print(f"Found {len(vulns)} vulnerabilities. Results saved to {output_file}", file=sys.stderr)
-        sys.exit(1)
+            print(f"Found {len(vulns)} vulnerabilities across {len(packages)} packages. Results saved to {output_file}", file=sys.stderr)
+            sys.exit(1)
+        except IOError as e:
+            print(f"Error writing output file: {str(e)}", file=sys.stderr)
+            sys.exit(1)
     else:
-        print("No known vulnerabilities in dependencies.", file=sys.stderr)
+        print(f"No known vulnerabilities found in {len(packages)} packages.", file=sys.stderr)
         sys.exit(0)
 
 if __name__ == "__main__":

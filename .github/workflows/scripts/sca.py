@@ -9,6 +9,7 @@ def get_vulnerability_details(vuln_id):
         res = requests.get(f"https://api.osv.dev/v1/vulns/{quote(vuln_id)}")
         res.raise_for_status()
         return res.json()
+    except requests.RequestException:
         return None
 
 def check_package_vulnerabilities(pkg, version):

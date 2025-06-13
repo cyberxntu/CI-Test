@@ -27,9 +27,15 @@ jobs:
           python-version: "3.10"
 
       - name: Install Python dependencies
-        run: pip install requests safety
+        run: pip install requests bandit detect-secrets
 
-      # Run SAST (custom script)
+      - name: Install Trivy
+        run: |
+          sudo apt-get install wget -y
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+
       - name: Run SAST
         run: python .github/workflows/scripts/sast.py app.py /tamplates
         continue-on-error: true
@@ -37,7 +43,6 @@ jobs:
       - name: Show SAST results
         run: cat sast_results.json || echo "No SAST issues"
 
-      # Run SCA (custom script)
       - name: Run SCA
         run: python .github/workflows/scripts/sca.py requirements.txt
         continue-on-error: true
@@ -45,7 +50,6 @@ jobs:
       - name: Show SCA results
         run: cat sca_results.json || echo "No SCA issues"
 
-      # Run Secret Scan (custom script)
       - name: Run Secret Scan
         run: python .github/workflows/scripts/secret_scanner.py
         continue-on-error: true
@@ -53,7 +57,6 @@ jobs:
       - name: Show Secret Scan results
         run: cat secrets_found.json || echo "No secrets found"
 
-      # Run Code Style Check
       - name: Run Code Style
         run: python .github/workflows/scripts/code_style.py
         continue-on-error: true
@@ -61,61 +64,39 @@ jobs:
       - name: Show Code Style results
         run: cat style_results.json || echo "No style issues"
 
-      ####################################
-      # >>> ADDED TOOLS START HERE <<<  #
-      ####################################
 
-      # SEMGREP SAST
-      - name: Install Semgrep
-        run: pip install semgrep
+      - name: Run Bandit
+        run: |
+          bandit -r . -f json -o bandit_results.json || true
 
-      - name: Run Semgrep Scan
-        run: semgrep --config auto --json --output semgrep_results.json || true
+      - name: Run detect-secrets
+        run: |
+          detect-secrets scan > detect_secrets.json || true
 
-      - name: Show Semgrep results
-        run: cat semgrep_results.json || echo "No Semgrep issues"
+      - name: Run Trivy SCA
+        run: |
+          trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json || true
 
-      # SAFETY SCA
-      - name: Run Safety Scan
-        run: safety scan --full-report -r requirements.txt --json > safety_results.json || true
 
-      - name: Show Safety results
-        run: cat safety_results.json || echo "No Safety issues"
-
-      # GITLEAKS Secret Scan
-      - name: Run Gitleaks Scan
-        uses: gitleaks/gitleaks-action@v2.3.4
-        with:
-          args: detect --source=. --report-format=json --report-path=gitleaks_results.json
-        continue-on-error: true
-
-      - name: Show Gitleaks results
-        run: cat gitleaks_results.json || echo "No Gitleaks issues"
-
-      ####################################
-      # >>> ADDED TOOLS END HERE <<<    #
-      ####################################
-
-      # Merge all results into one report
       - name: Merge all results
         run: |
           echo "{" > full_report.json
-          echo '"sast":' >> full_report.json && cat sast_results.json || echo '[]' >> full_report.json
+          echo '"sast":' >> full_report.json && cat sast_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"sca":' >> full_report.json && cat sca_results.json || echo '[]' >> full_report.json
+          echo '"sca":' >> full_report.json && cat sca_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"secrets":' >> full_report.json && cat secrets_found.json || echo '[]' >> full_report.json
+          echo '"secrets":' >> full_report.json && cat secrets_found.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"style":' >> full_report.json && cat style_results.json || echo '[]' >> full_report.json
+          echo '"style":' >> full_report.json && cat style_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"semgrep":' >> full_report.json && cat semgrep_results.json || echo '[]' >> full_report.json
+          echo '"bandit":' >> full_report.json && cat bandit_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"safety":' >> full_report.json && cat safety_results.json || echo '[]' >> full_report.json
+          echo '"detect_secrets":' >> full_report.json && cat detect_secrets.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"gitleaks":' >> full_report.json && cat gitleaks_results.json || echo '[]' >> full_report.json
+          echo '"trivy":' >> full_report.json && cat trivy_results.json >> full_report.json || echo '[]' >> full_report.json
           echo "}" >> full_report.json
 
-      # Final check for any issues
+
       - name: Final Check for Failures
         run: |
           echo "🔍 Checking scan results for any findings..."
@@ -123,11 +104,10 @@ jobs:
           (grep -q '"summary":' sca_results.json && echo "❌ SCA issues found" && exit 1) || echo "✅ No SCA issues"
           (grep -q '"pattern":' secrets_found.json && echo "❌ Secrets found" && exit 1) || echo "✅ No secrets"
           (grep -q '"issue":' style_results.json && echo "❌ Code style issues found" && exit 1) || echo "✅ Code style clean"
-          (grep -q '"check_id":' semgrep_results.json && echo "❌ Semgrep issues found" && exit 1) || echo "✅ No Semgrep issues"
-          (grep -q '"vulnerabilities":' safety_results.json && echo "❌ Safety issues found" && exit 1) || echo "✅ No Safety issues"
-          (grep -q '"rule_id":' gitleaks_results.json && echo "❌ Gitleaks secrets found" && exit 1) || echo "✅ No Gitleaks secrets"
+          (grep -q '"issue_confidence":' bandit_results.json && echo "❌ Bandit issues found" && exit 1) || echo "✅ Bandit clean"
+          (grep -q '"hashed_secret":' detect_secrets.json && echo "❌ Secrets detected by detect-secrets" && exit 1) || echo "✅ detect-secrets clean"
+          (grep -q '"VulnerabilityID":' trivy_results.json && echo "❌ Trivy vulnerabilities found" && exit 1) || echo "✅ Trivy clean"
 
-      # Upload artifacts
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
@@ -137,7 +117,7 @@ jobs:
             sca_results.json
             secrets_found.json
             style_results.json
-            semgrep_results.json
-            safety_results.json
-            gitleaks_results.json
+            bandit_results.json
+            detect_secrets.json
+            trivy_results.json
             full_report.json

@@ -77,7 +77,7 @@ jobs:
 
       # SAFETY SCA
       - name: Run Safety Scan
-        run: safety check -r requirements.txt --json > safety_results.json || true
+        run: safety scan --full-report -r requirements.txt --json > safety_results.json || true
 
       - name: Show Safety results
         run: cat safety_results.json || echo "No Safety issues"

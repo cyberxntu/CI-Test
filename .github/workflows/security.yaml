@@ -68,17 +68,17 @@ jobs:
       # Bandit scan
       - name: Run Bandit
         run: |
-          bandit -r . -f json -o bandit_results.json || true
+          bandit -r . -f json -o bandit_results.json || true app.py
 
       # detect-secrets scan
       - name: Run detect-secrets
         run: |
-          detect-secrets scan > detect_secrets.json || true
+          detect-secrets scan > detect_secrets.json || true app.py
 
       # Trivy scan
       - name: Run Trivy SCA
         run: |
-          trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json || true
+          trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json || true app.py
 
       # Merge all results
       - name: Merge all results

@@ -6,10 +6,10 @@ on:
   pull_request:
 
 permissions:
-  contents: read      
-  checks: write      
-  actions: read  
-  security-events: write 
+  contents: read
+  checks: write
+  actions: read
+  security-events: write
 
 jobs:
   custom-checks:
@@ -29,13 +29,11 @@ jobs:
       - name: Install Python dependencies
         run: pip install requests bandit detect-secrets
 
-      - name: Install Trivy
+      - name: Install Trivy (latest)
         run: |
-          sudo apt-get install wget -y
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-
+      # Run custom SAST
       - name: Run SAST
         run: python .github/workflows/scripts/sast.py app.py /tamplates
         continue-on-error: true
@@ -43,6 +41,7 @@ jobs:
       - name: Show SAST results
         run: cat sast_results.json || echo "No SAST issues"
 
+      # Run custom SCA
       - name: Run SCA
         run: python .github/workflows/scripts/sca.py requirements.txt
         continue-on-error: true
@@ -50,6 +49,7 @@ jobs:
       - name: Show SCA results
         run: cat sca_results.json || echo "No SCA issues"
 
+      # Run custom Secret Scan
       - name: Run Secret Scan
         run: python .github/workflows/scripts/secret_scanner.py
         continue-on-error: true
@@ -57,6 +57,7 @@ jobs:
       - name: Show Secret Scan results
         run: cat secrets_found.json || echo "No secrets found"
 
+      # Run code style check
       - name: Run Code Style
         run: python .github/workflows/scripts/code_style.py
         continue-on-error: true
@@ -64,20 +65,22 @@ jobs:
       - name: Show Code Style results
         run: cat style_results.json || echo "No style issues"
 
-
+      # Bandit scan
       - name: Run Bandit
         run: |
           bandit -r . -f json -o bandit_results.json || true
 
+      # detect-secrets scan
       - name: Run detect-secrets
         run: |
           detect-secrets scan > detect_secrets.json || true
 
+      # Trivy scan
       - name: Run Trivy SCA
         run: |
           trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json || true
 
-
+      # Merge all results
       - name: Merge all results
         run: |
           echo "{" > full_report.json
@@ -96,7 +99,7 @@ jobs:
           echo '"trivy":' >> full_report.json && cat trivy_results.json >> full_report.json || echo '[]' >> full_report.json
           echo "}" >> full_report.json
 
-
+      # Final check
       - name: Final Check for Failures
         run: |
           echo "🔍 Checking scan results for any findings..."
@@ -108,6 +111,7 @@ jobs:
           (grep -q '"hashed_secret":' detect_secrets.json && echo "❌ Secrets detected by detect-secrets" && exit 1) || echo "✅ detect-secrets clean"
           (grep -q '"VulnerabilityID":' trivy_results.json && echo "❌ Trivy vulnerabilities found" && exit 1) || echo "✅ Trivy clean"
 
+      # Upload all artifacts
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:

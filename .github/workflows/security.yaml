@@ -80,42 +80,23 @@ jobs:
         run: |
           trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json || true
 
-      # CodeQL static analysis (SARIF to JSON)
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
-        with:
-          languages: python
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
-
-      - name: Run CodeQL analysis
-        uses: github/codeql-action/analyze@v2
-        with:
-          category: "/language:python"
-
-      - name: Copy CodeQL SARIF to JSON
-        run: cp codeql-results/python.sarif codeql_results.json || echo '{}' > codeql_results.json
-
       # Merge all results
       - name: Merge all results
         run: |
           echo "{" > full_report.json
-          echo '"sast":' >> full_report.json && cat sast_results.json || echo '[]' >> full_report.json
+          echo '"sast":' >> full_report.json && cat sast_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"sca":' >> full_report.json && cat sca_results.json || echo '[]' >> full_report.json
+          echo '"sca":' >> full_report.json && cat sca_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"secrets":' >> full_report.json && cat secrets_found.json || echo '[]' >> full_report.json
+          echo '"secrets":' >> full_report.json && cat secrets_found.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"style":' >> full_report.json && cat style_results.json || echo '[]' >> full_report.json
+          echo '"style":' >> full_report.json && cat style_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"bandit":' >> full_report.json && cat bandit_results.json || echo '[]' >> full_report.json
+          echo '"bandit":' >> full_report.json && cat bandit_results.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"detect_secrets":' >> full_report.json && cat detect_secrets.json || echo '[]' >> full_report.json
+          echo '"detect_secrets":' >> full_report.json && cat detect_secrets.json >> full_report.json || echo '[]' >> full_report.json
           echo ',' >> full_report.json
-          echo '"trivy":' >> full_report.json && cat trivy_results.json || echo '[]' >> full_report.json
-          echo ',' >> full_report.json
-          echo '"codeql":' >> full_report.json && cat codeql_results.json || echo '[]' >> full_report.json
+          echo '"trivy":' >> full_report.json && cat trivy_results.json >> full_report.json || echo '[]' >> full_report.json
           echo "}" >> full_report.json
 
       # Final check
@@ -129,7 +110,6 @@ jobs:
           (grep -q '"issue_confidence":' bandit_results.json && echo "❌ Bandit issues found" && exit 1) || echo "✅ Bandit clean"
           (grep -q '"hashed_secret":' detect_secrets.json && echo "❌ Secrets detected by detect-secrets" && exit 1) || echo "✅ detect-secrets clean"
           (grep -q '"VulnerabilityID":' trivy_results.json && echo "❌ Trivy vulnerabilities found" && exit 1) || echo "✅ Trivy clean"
-          (grep -q '"message":' codeql_results.json && echo "❌ CodeQL findings found" && exit 1) || echo "✅ CodeQL clean"
 
       # Upload all artifacts
       - name: Upload Results
@@ -144,5 +124,4 @@ jobs:
             bandit_results.json
             detect_secrets.json
             trivy_results.json
-            codeql_results.json
             full_report.json

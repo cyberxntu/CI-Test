@@ -1,0 +1,108 @@
+name: Security CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+  actions: read
+  security-events: write
+
+jobs:
+  custom-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        run: pip install requests bandit detect-secrets
+
+      - name: Install Trivy (latest)
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      # Run custom SAST
+      - name: Run SAST
+        run: python .github/workflows/scripts/sast.py app.py /tamplates
+
+      - name: Show SAST results
+        run: cat sast_results.json
+
+      # Run custom SCA
+      - name: Run SCA
+        run: python .github/workflows/scripts/sca.py requirements.txt
+
+      - name: Show SCA results
+        run: cat sca_results.json
+
+      # Run custom Secret Scan
+      - name: Run Secret Scan
+        run: python .github/workflows/scripts/secret_scanner.py
+
+      - name: Show Secret Scan results
+        run: cat secrets_found.json
+
+      # Run code style check
+      - name: Run Code Style
+        run: python .github/workflows/scripts/code_style.py
+
+      - name: Show Code Style results
+        run: cat style_results.json
+
+      # Bandit scan
+      - name: Run Bandit
+        run: bandit -r . -f json -o bandit_results.json
+
+      # detect-secrets scan
+      - name: Run detect-secrets
+        run: detect-secrets scan > detect_secrets.json
+
+      # Trivy scan
+      - name: Run Trivy SCA
+        run: trivy fs . --scanners vuln --severity HIGH,CRITICAL --format json --output trivy_results.json
+
+      # Merge all results
+      - name: Merge all results
+        run: |
+          echo "{" > full_report.json
+          echo '"sast":' >> full_report.json && cat sast_results.json
+          echo ',' >> full_report.json
+          echo '"sca":' >> full_report.json && cat sca_results.json
+          echo ',' >> full_report.json
+          echo '"secrets":' >> full_report.json && cat secrets_found.json
+          echo ',' >> full_report.json
+          echo '"style":' >> full_report.json && cat style_results.json
+          echo ',' >> full_report.json
+          echo '"bandit":' >> full_report.json && cat bandit_results.json
+          echo ',' >> full_report.json
+          echo '"detect_secrets":' >> full_report.json && cat detect_secrets.json
+          echo ',' >> full_report.json
+          echo '"trivy":' >> full_report.json && cat trivy_results.json
+          echo "}" >> full_report.json
+
+      # Upload all artifacts
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-results
+          path: |
+            sast_results.json
+            sca_results.json
+            secrets_found.json
+            style_results.json
+            bandit_results.json
+            detect_secrets.json
+            trivy_results.json
+            full_report.json

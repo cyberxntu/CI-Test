@@ -2,7 +2,7 @@ from flask import Flask, request, redirect, render_template, session
 import sqlite3
 import os
 
-app = Flask(__name__)
+app = Flask(name)
 app.secret_key = 'super_insecure_key'  
 
 DATABASE = 'db.sqlite'
@@ -118,5 +118,5 @@ def logout():
     session.clear()
     return redirect('/')
 
-if __name__ == '__main__':
+if name == 'main':
     app.run(debug=True)
